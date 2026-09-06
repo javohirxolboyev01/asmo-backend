@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AttendanceRecord {
+  id        String  @id
+  lessonId  String
+  studentId String
+  status    String
+  note      String?
+  markedAt  DateTime @default(now())
+  User      User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  Lesson    Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, studentId])
+}
+
+model CoinTransaction {
+  id         String   @id
+  studentId  String
+  amount     Int
+  reason     String
+  sourceType String
+  createdAt  DateTime @default(now())
+  User       User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+}
+
+model Direction {
+  id    String  @id
+  name  String  @unique
+  color String
+  Group Group[]
+}
+
+model Enrollment {
+  id        String   @id
+  studentId String
+  groupId   String
+  status    String   @default("ACTIVE")
+  joinedAt  DateTime @default(now())
+  Group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, groupId])
+}
+
+model Group {
+  id          String       @id
+  name        String
+  courseName  String @default("")
+  directionId String
+  teacherId   String
+  status      String       @default("ACTIVE")
+  maxStudents Int          @default(20)
+  scheduleDays String      @default("")
+  scheduleTime String      @default("")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now()) @updatedAt
+  Enrollment  Enrollment[]
+  Teacher     Teacher      @relation(fields: [teacherId], references: [id])
+  Direction   Direction    @relation(fields: [directionId], references: [id])
+  Lesson      Lesson[]
+
+  @@index([teacherId])
+  @@index([directionId])
+}
+
+model Homework {
+  id          String       @id
+  lessonId    String       @unique
+  title       String
+  description String?
+  deadline    DateTime
+  maxScore    Int          @default(100)
+  status      String       @default("ACTIVE")
+  Lesson      Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  Submission  Submission[]
+}
+
+model Lesson {
+  id               String             @id
+  groupId          String
+  lessonOrder      Int
+  lessonDate       DateTime
+  topic            String
+  description      String?
+  status           String             @default("PLANNED")
+  AttendanceRecord AttendanceRecord[]
+  Homework         Homework?
+  Group            Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, lessonOrder])
+  @@index([lessonDate])
+}
+
+model Notification {
+  id        String   @id
+  userId    String
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model Payment {
+  id          String    @id
+  studentId   String
+  amount      Int
+  orderNumber Int       @default(1)
+  amountNumber Int      @default(0)
+  status      String    @default("PENDING")
+  paymentType String
+  description String?
+  teacherName String    @default("")
+  receiptNumber String?
+  paidAt      DateTime?
+  dueDate     DateTime
+  createdAt   DateTime  @default(now())
+  User        User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+}
+
+model Product {
+  id           String         @id
+  name         String
+  description  String?
+  price        Int
+  originalPrice Int?
+  category     String
+  image        String @default("")
+  rating       Float  @default(0)
+  reviews      Int    @default(0)
+  imageUrl     String?
+  isPopular    Boolean        @default(false)
+  isNew        Boolean        @default(false)
+  isLimited    Boolean        @default(false)
+  isActive     Boolean        @default(true)
+  stock        Int?
+  createdAt    DateTime       @default(now())
+  Purchase     Purchase[]
+  WishlistItem WishlistItem[]
+}
+
+model Purchase {
+  id        String   @id
+  studentId String
+  productId String
+  price     Int
+  createdAt DateTime @default(now())
+  Product   Product  @relation(fields: [productId], references: [id])
+  User      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+}
+
+model RefreshToken {
+  id        String    @id
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  User      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Submission {
+  id          String    @id
+  homeworkId  String
+  studentId   String
+  content     String
+  attachmentUrl String?
+  status      String    @default("SUBMITTED")
+  score       Int?
+  feedback    String?
+  submittedAt DateTime  @default(now())
+  gradedAt    DateTime?
+  User        User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  Homework    Homework  @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+
+  @@unique([homeworkId, studentId])
+}
+
+model Teacher {
+  id       String  @id
+  fullName String
+  avatar   String?
+  userId   String? @unique
+  Group    Group[]
+}
+
+model User {
+  id               String             @id
+  email            String             @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String?
+  avatar           String?
+  role             String             @default("STUDENT")
+  status           String             @default("ACTIVE")
+  coinBalance      Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  AttendanceRecord AttendanceRecord[]
+  CoinTransaction  CoinTransaction[]
+  Enrollment       Enrollment[]
+  Notification     Notification[]
+  Payment          Payment[]
+  Purchase         Purchase[]
+  RefreshToken     RefreshToken[]
+  Submission       Submission[]
+  WishlistItem     WishlistItem[]
+}
+
+model WishlistItem {
+  id        String   @id
+  studentId String
+  productId String
+  createdAt DateTime @default(now())
+  Product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, productId])
+}
