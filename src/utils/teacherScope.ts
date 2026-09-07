@@ -1,5 +1,8 @@
-// src/utils/teacherScope.ts — every teacher-panel query is scoped to that
-// teacher's own groups; ADMIN sees everything.
+// src/utils/teacherScope.ts — this app only has two roles, TEACHER and
+// STUDENT, and TEACHER acts as a full admin (there's no separate admin-only
+// data set). So groupScope() is unrestricted for any staff request; teacherId()
+// still resolves the requesting teacher's own profile id, used to default the
+// "owner" of a group/notification recipient, never as an access restriction.
 import { prisma } from "../lib/prisma.js";
 
 export const uid = (req: any) => req.user.id;
@@ -16,8 +19,7 @@ export const teacherId = async (req: any) => {
   return teacher.id;
 };
 
-export const groupScope = async (req: any) =>
-  req.user.role === "ADMIN" ? {} : { teacherId: await teacherId(req) };
+export const groupScope = async (_req: any) => ({});
 
 export const teacherGroup = async (req: any, groupId: string) =>
   prisma.group.findFirst({ where: { id: groupId, ...(await groupScope(req)) } });

@@ -12,18 +12,18 @@ dashboardRouter.get(
   asyncRoute(async (req: any, res: any) => {
     const userId = uid(req);
     const current = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const upcoming = await prisma.lesson.findMany({
-      where: {
-        Group: { Enrollment: { some: { studentId: userId } } },
-        lessonDate: { gte: new Date() },
-        status: "PLANNED",
-      },
-      orderBy: { lessonDate: "asc" },
-      take: 5,
-      include: { Group: true },
-    });
 
     if (current.role === "STUDENT") {
+      const upcoming = await prisma.lesson.findMany({
+        where: {
+          Group: { Enrollment: { some: { studentId: userId } } },
+          lessonDate: { gte: new Date() },
+          status: "PLANNED",
+        },
+        orderBy: { lessonDate: "asc" },
+        take: 5,
+        include: { Group: true },
+      });
       const enrollments = await prisma.enrollment.findMany({
         where: { studentId: userId },
         include: { Group: { include: { Direction: true, Teacher: true, Lesson: true } } },
@@ -66,11 +66,9 @@ dashboardRouter.get(
       });
     }
 
-    const teacher = current.role === "ADMIN" ? null : await prisma.teacher.findUnique({ where: { userId } });
-    const owned =
-      current.role === "ADMIN"
-        ? await prisma.group.findMany({ select: { id: true } })
-        : await prisma.group.findMany({ where: { teacherId: teacher?.id ?? "__none__" }, select: { id: true } });
+    // TEACHER acts as a full admin here — there's no separate admin-only
+    // data set, so both roles see every group/lesson/submission.
+    const owned = await prisma.group.findMany({ select: { id: true } });
 
     res.json({
       user: userSummary(current),
@@ -89,14 +87,12 @@ dashboardRouter.get(
         pendingGradingCount: await prisma.submission.count({ where: { status: "SUBMITTED" } }),
       },
       upcomingLessons: (
-        current.role === "ADMIN"
-          ? await prisma.lesson.findMany({
-              where: { lessonDate: { gte: new Date() }, status: "PLANNED" },
-              orderBy: { lessonDate: "asc" },
-              take: 5,
-              include: { Group: true },
-            })
-          : upcoming
+        await prisma.lesson.findMany({
+          where: { lessonDate: { gte: new Date() }, status: "PLANNED" },
+          orderBy: { lessonDate: "asc" },
+          take: 5,
+          include: { Group: true },
+        })
       ).map((lesson) => ({
         id: lesson.id,
         topic: lesson.topic,
