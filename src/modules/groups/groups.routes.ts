@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma.js";
 import { asyncRoute, idSchema, requireAuth, requireRole, validate } from "../../middleware/index.js";
 import { lower, publicUser, userSummary } from "../../utils/serializers.js";
 import { newId } from "../../utils/ids.js";
-import { uid, groupScope } from "../../utils/teacherScope.js";
+import { uid, groupScope, teacherId } from "../../utils/teacherScope.js";
 
 const staff = ["TEACHER", "ADMIN"];
 
@@ -16,7 +16,10 @@ groupsRouter.get(
   asyncRoute(async (req: any, res: any) => {
     const current = await prisma.user.findUniqueOrThrow({ where: { id: uid(req) } });
     const groups = await prisma.group.findMany({
-      where: current.role === "STUDENT" ? { Enrollment: { some: { studentId: current.id } } } : {},
+      where:
+        current.role === "STUDENT"
+          ? { Enrollment: { some: { studentId: current.id } } }
+          : await groupScope(req),
       include: { Direction: true, Teacher: true, Enrollment: true },
     });
     res.json({
@@ -97,7 +100,9 @@ groupsRouter.get(
     const group = await prisma.group.findFirst({
       where: {
         id: req.params.id,
-        ...(current.role === "STUDENT" ? { Enrollment: { some: { studentId: current.id } } } : {}),
+        ...(current.role === "STUDENT"
+          ? { Enrollment: { some: { studentId: current.id } } }
+          : await groupScope(req)),
       },
       include: {
         Direction: true,
@@ -174,8 +179,9 @@ groupsRouter.post(
     }),
   ),
   asyncRoute(async (req: any, res: any) => {
+    const ownTeacherId = req.user.role === "TEACHER" ? await teacherId(req) : req.body.teacherId;
     const group = await prisma.group.create({
-      data: { id: newId(), ...req.body },
+      data: { id: newId(), ...req.body, teacherId: ownTeacherId },
       include: { Direction: true, Teacher: true, Enrollment: true },
     });
     res.status(201).json(group);
@@ -203,7 +209,7 @@ groupsRouter.patch(
     }),
   ),
   asyncRoute(async (req: any, res: any) => {
-    const group = await prisma.group.findUnique({ where: { id: req.params.id } });
+    const group = await prisma.group.findFirst({ where: { id: req.params.id, ...(await groupScope(req)) } });
     if (!group) return res.status(404).json({ error: "Group not found" });
     res.json(await prisma.group.update({ where: { id: group.id }, data: req.body }));
   }),
@@ -215,9 +221,9 @@ groupsRouter.delete(
   requireRole(...staff),
   validate(idSchema),
   asyncRoute(async (req: any, res: any) => {
-    if (!(await prisma.group.findUnique({ where: { id: req.params.id } })))
-      return res.status(404).json({ error: "Group not found" });
-    await prisma.group.delete({ where: { id: req.params.id } });
+    const group = await prisma.group.findFirst({ where: { id: req.params.id, ...(await groupScope(req)) } });
+    if (!group) return res.status(404).json({ error: "Group not found" });
+    await prisma.group.delete({ where: { id: group.id } });
     res.status(204).send();
   }),
 );
@@ -236,7 +242,7 @@ groupsRouter.post(
   asyncRoute(async (req: any, res: any) => {
     const student = await prisma.user.findFirst({ where: { id: req.body.userId, role: "STUDENT" } });
     if (!student) return res.status(404).json({ error: "Student not found" });
-    const group = await prisma.group.findUnique({ where: { id: req.params.id } });
+    const group = await prisma.group.findFirst({ where: { id: req.params.id, ...(await groupScope(req)) } });
     if (!group) return res.status(404).json({ error: "Group not found" });
     res.status(201).json(
       await prisma.enrollment.upsert({
@@ -260,7 +266,9 @@ groupsRouter.delete(
     }),
   ),
   asyncRoute(async (req: any, res: any) => {
-    await prisma.enrollment.deleteMany({ where: { groupId: req.params.id, studentId: req.params.userId } });
+    const group = await prisma.group.findFirst({ where: { id: req.params.id, ...(await groupScope(req)) } });
+    if (!group) return res.status(404).json({ error: "Group not found" });
+    await prisma.enrollment.deleteMany({ where: { groupId: group.id, studentId: req.params.userId } });
     res.status(204).send();
   }),
 );
@@ -281,15 +289,15 @@ groupsRouter.post(
     }),
   ),
   asyncRoute(async (req: any, res: any) => {
-    if (!(await prisma.group.findUnique({ where: { id: req.params.id } })))
-      return res.status(404).json({ error: "Group not found" });
+    const group = await prisma.group.findFirst({ where: { id: req.params.id, ...(await groupScope(req)) } });
+    if (!group) return res.status(404).json({ error: "Group not found" });
     const last = await prisma.lesson.findFirst({
-      where: { groupId: req.params.id },
+      where: { groupId: group.id },
       orderBy: { lessonOrder: "desc" },
     });
     res.status(201).json(
       await prisma.lesson.create({
-        data: { id: newId(), groupId: req.params.id, lessonOrder: (last?.lessonOrder ?? 0) + 1, ...req.body },
+        data: { id: newId(), groupId: group.id, lessonOrder: (last?.lessonOrder ?? 0) + 1, ...req.body },
       }),
     );
   }),
