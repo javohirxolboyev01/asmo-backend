@@ -1,13 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
-import { asyncRoute, requireAuth, requireRole, validate } from "../../middleware/index.js";
-import { publicUser } from "../../utils/serializers.js";
+import { asyncRoute, idSchema, requireAuth, requireRole, validate } from "../../middleware/index.js";
+import { publicUser, submissionSummary } from "../../utils/serializers.js";
 import { gradeBody } from "../../utils/schemas.js";
 import { groupScope } from "../../utils/teacherScope.js";
 import { newId } from "../../utils/ids.js";
 
 const staff = ["TEACHER", "ADMIN"];
+const submissionInclude = {
+  User: { select: publicUser },
+  Homework: { include: { Lesson: { include: { Group: true } } } },
+} as const;
 
 export const submissionsRouter = Router();
 
@@ -15,21 +19,32 @@ submissionsRouter.get(
   "/submissions",
   requireAuth,
   requireRole(...staff),
-  asyncRoute(async (req: any, res: any) =>
-    res.json(
-      await prisma.submission.findMany({
-        where: {
-          Homework: { Lesson: { Group: await groupScope(req) } },
-          ...(req.query.status ? { status: String(req.query.status).toUpperCase() } : {}),
-        },
-        include: {
-          User: { select: publicUser },
-          Homework: { include: { Lesson: { include: { Group: true } } } },
-        },
-        orderBy: { submittedAt: "desc" },
-      }),
-    ),
-  ),
+  asyncRoute(async (req: any, res: any) => {
+    const rows = await prisma.submission.findMany({
+      where: {
+        Homework: { Lesson: { Group: await groupScope(req) } },
+        ...(req.query.status ? { status: String(req.query.status).toUpperCase() } : {}),
+      },
+      include: submissionInclude,
+      orderBy: { submittedAt: "desc" },
+    });
+    res.json({ submissions: rows.map(submissionSummary) });
+  }),
+);
+
+submissionsRouter.get(
+  "/submissions/:id",
+  requireAuth,
+  requireRole(...staff),
+  validate(idSchema),
+  asyncRoute(async (req: any, res: any) => {
+    const submission = await prisma.submission.findFirst({
+      where: { id: req.params.id, Homework: { Lesson: { Group: await groupScope(req) } } },
+      include: submissionInclude,
+    });
+    if (!submission) return res.status(404).json({ error: "Submission not found" });
+    res.json(submissionSummary(submission));
+  }),
 );
 
 submissionsRouter.patch(

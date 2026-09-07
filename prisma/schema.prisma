@@ -18,6 +18,7 @@ model AttendanceRecord {
   Lesson    Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@unique([lessonId, studentId])
+  @@index([studentId])
 }
 
 model CoinTransaction {
@@ -49,6 +50,7 @@ model Enrollment {
   User      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, groupId])
+  @@index([groupId])
 }
 
 model Group {
@@ -106,6 +108,7 @@ model Notification {
   type      String
   title     String
   message   String
+  relatedId String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
   User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -192,6 +195,7 @@ model Submission {
   Homework    Homework  @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
 
   @@unique([homeworkId, studentId])
+  @@index([status])
 }
 
 model Teacher {

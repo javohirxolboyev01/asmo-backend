@@ -14,7 +14,7 @@ teachersRouter.get(
   requireAuth,
   requireRole(...staff),
   asyncRoute(async (_req: any, res: any) => {
-    const rows = await prisma.teacher.findMany({ include: { Group: true } });
+    const rows = await prisma.teacher.findMany({ include: { _count: { select: { Group: true } } } });
     const users = await prisma.user.findMany({
       where: { id: { in: rows.flatMap((x) => (x.userId ? [x.userId] : [])) } },
       select: { id: true, email: true },
@@ -27,7 +27,7 @@ teachersRouter.get(
         avatar: x.avatar,
         email: x.userId ? emails.get(x.userId) : undefined,
         userId: x.userId,
-        groupsCount: x.Group.length,
+        groupsCount: x._count.Group,
       })),
     });
   }),

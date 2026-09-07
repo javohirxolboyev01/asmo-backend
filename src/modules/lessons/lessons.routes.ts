@@ -16,21 +16,50 @@ lessonsRouter.get(
   validate(idSchema),
   asyncRoute(async (req: any, res: any) => {
     const current = await prisma.user.findUniqueOrThrow({ where: { id: uid(req) } });
+    const isStaff = current.role !== "STUDENT";
     const lesson = await prisma.lesson.findFirst({
       where: {
         id: req.params.id,
         ...(current.role === "STUDENT" ? { Group: { Enrollment: { some: { studentId: current.id } } } } : {}),
       },
       include: {
-        Group: true,
-        Homework: { include: { Submission: { where: { studentId: current.id } } } },
+        Group: {
+          include: {
+            Teacher: true,
+            ...(isStaff ? { Enrollment: { where: { status: { not: "DROPPED" } }, include: { User: true } } } : {}),
+          },
+        },
+        Homework: {
+          include: { Submission: isStaff ? true : { where: { studentId: current.id } } },
+        },
         AttendanceRecord: true,
       },
     });
     if (!lesson)
       return res.status(current.role === "STUDENT" ? 403 : 404).json({ error: "Lesson not found or access denied" });
     const homework = lesson.Homework;
-    const submission = homework?.Submission[0] ?? null;
+    const submission = isStaff ? null : homework?.Submission[0] ?? null;
+
+    let roster;
+    if (isStaff) {
+      const attendanceByStudent = new Map(lesson.AttendanceRecord.map((a) => [a.studentId, a]));
+      const submissionByStudent = new Map((homework?.Submission ?? []).map((s: any) => [s.studentId, s]));
+      roster = ((lesson.Group as any).Enrollment ?? []).map((enrollment: any) => {
+        const record = attendanceByStudent.get(enrollment.studentId);
+        const studentSubmission = submissionByStudent.get(enrollment.studentId) as any;
+        return {
+          id: enrollment.User.id,
+          firstName: enrollment.User.firstName,
+          lastName: enrollment.User.lastName,
+          avatar: enrollment.User.avatar,
+          attendanceStatus: record ? lower(record.status) : null,
+          submission: studentSubmission
+            ? { ...studentSubmission, status: lower(studentSubmission.status) }
+            : null,
+        };
+      });
+    }
+
     res.json({
       lesson: {
         id: lesson.id,
@@ -40,7 +69,7 @@ lessonsRouter.get(
         lessonDate: lesson.lessonDate,
         lessonOrder: lesson.lessonOrder,
         groupName: lesson.Group.name,
-        teacherName: "",
+        teacherName: lesson.Group.Teacher.fullName,
         status: lower(lesson.status),
       },
       homework: homework
@@ -54,9 +83,7 @@ lessonsRouter.get(
             status: lower(homework.status),
           }
         : null,
-      ...(current.role === "STUDENT"
-        ? { submission: submission ? { ...submission, status: lower(submission.status) } : null }
-        : { roster: lesson.AttendanceRecord }),
+      ...(isStaff ? { roster } : { submission: submission ? { ...submission, status: lower(submission.status) } : null }),
     });
   }),
 );
@@ -138,7 +165,7 @@ lessonsRouter.post(
     z.object({
       body: z.object({
         records: z.array(
-          z.object({ userId: z.string(), status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]) }),
+          z.object({ userId: z.string(), status: z.enum(["PRESENT", "ABSENT"]) }),
         ),
       }),
       params: z.object({ id: z.string() }),

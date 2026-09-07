@@ -12,9 +12,12 @@ directionsRouter.get(
   "/directions",
   requireAuth,
   asyncRoute(async (_req: any, res: any) => {
-    const rows = await prisma.direction.findMany({ include: { Group: true }, orderBy: { name: "asc" } });
+    const rows = await prisma.direction.findMany({
+      include: { _count: { select: { Group: true } } },
+      orderBy: { name: "asc" },
+    });
     res.json({
-      directions: rows.map((x) => ({ id: x.id, name: x.name, color: x.color, groupsCount: x.Group.length })),
+      directions: rows.map((x) => ({ id: x.id, name: x.name, color: x.color, groupsCount: x._count.Group })),
     });
   }),
 );

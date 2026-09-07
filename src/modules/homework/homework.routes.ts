@@ -16,14 +16,29 @@ homeworkRouter.post(
   asyncRoute(async (req: any, res: any) => {
     const homework = await prisma.homework.findFirst({
       where: { id: req.params.id, Lesson: { Group: { Enrollment: { some: { studentId: uid(req) } } } } },
+      include: { Lesson: { include: { Group: { include: { Teacher: true } } } } },
     });
     if (!homework) return res.status(404).json({ error: "Homework not found" });
     if (homework.deadline < new Date()) return res.status(400).json({ error: "Homework deadline has passed" });
+    const student = await prisma.user.findUniqueOrThrow({ where: { id: uid(req) } });
     const item = await prisma.submission.upsert({
       where: { homeworkId_studentId: { homeworkId: homework.id, studentId: uid(req) } },
-      update: { content: req.body.content, submittedAt: new Date() },
+      update: { content: req.body.content, submittedAt: new Date(), status: "SUBMITTED", score: null, feedback: null, gradedAt: null },
       create: { id: newId(), homeworkId: homework.id, studentId: uid(req), content: req.body.content },
     });
+    const teacherUserId = homework.Lesson.Group.Teacher.userId;
+    if (teacherUserId) {
+      await prisma.notification.create({
+        data: {
+          id: newId(),
+          userId: teacherUserId,
+          type: "SUBMISSION",
+          title: "New homework submission",
+          message: `${student.firstName} ${student.lastName} — ${homework.Lesson.topic}`,
+          relatedId: item.id,
+        },
+      });
+    }
     res.status(201).json(item);
   }),
 );

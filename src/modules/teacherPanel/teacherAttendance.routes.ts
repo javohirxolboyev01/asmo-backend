@@ -9,7 +9,7 @@ export const teacherAttendanceRouter = Router();
 
 const attendanceBody = z.object({
   body: z.object({
-    status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]),
+    status: z.enum(["PRESENT", "ABSENT"]),
     note: z.string().max(1000).optional(),
   }),
   params: z.object({ lessonId: z.string(), studentId: z.string() }),

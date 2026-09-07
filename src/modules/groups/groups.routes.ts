@@ -53,15 +53,37 @@ groupsRouter.get(
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
-    const lessons = await prisma.lesson.findMany({
-      where: { groupId: group.id, lessonDate: { gte: weekStart, lt: weekEnd } },
-      include: { AttendanceRecord: true },
-      orderBy: { lessonDate: "asc" },
+    const [lessons, enrollments] = await Promise.all([
+      prisma.lesson.findMany({
+        where: { groupId: group.id, lessonDate: { gte: weekStart, lt: weekEnd } },
+        include: { AttendanceRecord: true },
+        orderBy: { lessonDate: "asc" },
+      }),
+      prisma.enrollment.findMany({
+        where: { groupId: group.id, status: { not: "DROPPED" } },
+        include: { User: true },
+      }),
+    ]);
+    const roster = enrollments.map((enrollment) => {
+      const attendance: Record<string, string> = {};
+      for (const lesson of lessons) {
+        const record = lesson.AttendanceRecord.find((a) => a.studentId === enrollment.studentId);
+        if (record) attendance[lesson.id] = lower(record.status)!;
+      }
+      return {
+        id: enrollment.User.id,
+        firstName: enrollment.User.firstName,
+        lastName: enrollment.User.lastName,
+        avatar: enrollment.User.avatar,
+        coinBalance: enrollment.User.coinBalance,
+        attendance,
+      };
     });
     res.json({
       weekStart,
       weekEnd,
-      lessons: lessons.map((lesson) => ({ ...lesson, attendance: lesson.AttendanceRecord })),
+      lessons: lessons.map((lesson) => ({ id: lesson.id, topic: lesson.topic, lessonDate: lesson.lessonDate })),
+      roster,
     });
   }),
 );

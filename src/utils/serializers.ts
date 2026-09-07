@@ -26,6 +26,35 @@ export const userSummary = (user: any) => ({
   coinBalance: user.coinBalance ?? 0,
 });
 
+export const submissionSummary = (submission: any) => ({
+  id: submission.id,
+  content: submission.content,
+  attachmentUrl: submission.attachmentUrl,
+  submittedAt: submission.submittedAt,
+  score: submission.score,
+  feedback: submission.feedback,
+  status: lower(submission.status),
+  student: {
+    id: submission.User.id,
+    firstName: submission.User.firstName,
+    lastName: submission.User.lastName,
+    avatar: submission.User.avatar,
+  },
+  homework: {
+    id: submission.Homework.id,
+    title: submission.Homework.title,
+    description: submission.Homework.description ?? undefined,
+    maxScore: submission.Homework.maxScore,
+    deadline: submission.Homework.deadline,
+  },
+  lesson: {
+    id: submission.Homework.Lesson.id,
+    topic: submission.Homework.Lesson.topic,
+    groupId: submission.Homework.Lesson.groupId,
+    groupName: submission.Homework.Lesson.Group.name,
+  },
+});
+
 export const paymentSummary = (payment: any, includeStudent = false) => ({
   id: payment.id,
   orderNumber: payment.orderNumber,

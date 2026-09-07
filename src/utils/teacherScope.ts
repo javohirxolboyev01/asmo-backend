@@ -5,12 +5,14 @@ import { prisma } from "../lib/prisma.js";
 export const uid = (req: any) => req.user.id;
 
 export const teacherId = async (req: any) => {
+  if (req._teacherId) return req._teacherId as string;
   const teacher = await prisma.teacher.findUnique({ where: { userId: uid(req) } });
   if (!teacher) {
     const error: any = new Error("Teacher profile not found");
     error.status = 403;
     throw error;
   }
+  req._teacherId = teacher.id;
   return teacher.id;
 };
 
