@@ -15,8 +15,11 @@ async function main() {
     update: { passwordHash, role: 'TEACHER', status: 'ACTIVE', firstName: 'Bekjon', lastName: 'Teacher', updatedAt: new Date() },
     create: { id: crypto.randomUUID(), email: 'bekjon2000@gmail.com', passwordHash, firstName: 'Bekjon', lastName: 'Teacher', role: 'TEACHER', status: 'ACTIVE', updatedAt: new Date() }
   });
-  const teacher = await prisma.teacher.findFirst({ where: { userId: teacherUser.id } }) ?? await prisma.teacher.findFirst();
-  if (teacher) await prisma.teacher.update({ where: { id: teacher.id }, data: { userId: teacherUser.id } });
+  await prisma.teacher.upsert({
+    where: { userId: teacherUser.id },
+    update: { fullName: `${teacherUser.firstName} ${teacherUser.lastName}` },
+    create: { id: crypto.randomUUID(), fullName: `${teacherUser.firstName} ${teacherUser.lastName}`, userId: teacherUser.id }
+  });
   console.log('Teacher seed ready: bekjon2000@gmail.com / 000000');
 }
 main().finally(() => prisma.$disconnect());
